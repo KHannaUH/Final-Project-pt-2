@@ -1,0 +1,207 @@
+## Name: Karim Hanna StudID: 1969165
+import csv # import csv to read / write files
+import sys
+from datetime import datetime # imports current date to compare later
+
+
+class Item:
+    ## this init fuctions stores all the values
+    def __init__(self, item_id, manufacturer_name, item_type, item_price=None, service_date=None,
+                 damage=None):  # item = Item(item_id, manufacturer_name, item_type)
+        self.item_id = item_id.strip()
+        self.manufacturer_name = manufacturer_name.strip()
+        self.item_type = item_type.strip()
+        if item_price != None:
+            self.set_price(item_price)
+        if service_date != None:
+            self.set_servicedate(service_date)
+        if damage != None:
+            self.damage = damage.strip()
+
+    # converts date that prints into m/d/y
+    def get_service_date(self):
+        return datetime.strftime(self.service_date, '%#m/%#d/%Y')
+
+    def is_past_servicedate(self):
+        return self.service_date < datetime.now().date()
+
+    def is_damaged(self):
+        return self.damage == 'damaged'
+
+    def set_price(self,pricestr):
+        self.item_price = int(pricestr)
+    def set_servicedate(self,servicedatestr):
+        self.service_date = datetime.strptime(servicedatestr, '%m/%d/%Y').date()
+
+    def __repr__(self):
+        return f'{self.item_id},{self.manufacturer_name},{self.item_type},{self.item_price}'
+
+
+class Inventory:
+    def __init__(self, items):  # inv = Inventory()
+        self.items = items  # dictionary of item_id to Item object
+        self.types = []
+        self.manufacturers = []
+        self.searchengine = {}
+        for itemid, item in items.items():
+            ## if values are not present they are added in
+            if item.item_type not in self.types:
+                self.types.append(item.item_type)
+            if item.manufacturer_name not in self.manufacturers:
+                self.manufacturers.append(item.manufacturer_name)
+            if item.is_past_servicedate() or item.is_damaged():
+                continue
+            if item.manufacturer_name not in self.searchengine:
+                self.searchengine[item.manufacturer_name]={}
+            if item.item_type not in self.searchengine[item.manufacturer_name]:
+                self.searchengine[item.manufacturer_name][item.item_type]=[]
+            self.searchengine[item.manufacturer_name][item.item_type].append(item)
+
+
+
+
+    ## this fuction when called on will start wrting in FullInventory.csv file
+    def fullInventoryReport(self):
+        with open('FullInventory.csv', 'w') as file:
+            #sorts item based on manufacturer name
+            sorted_items = sorted(items.values(), key=lambda v: v.manufacturer_name)
+            ## the for function writes in all values line by line
+            for i in sorted_items:
+                file.write(
+                    f'{i.item_id},{i.manufacturer_name},{i.item_type},{i.item_price},{i.get_service_date()},{i.damage}\n')
+
+    def itemInventoryReports(self):
+        for current_type in self.types: ## creates files under tower phone laptop
+            with open(current_type.title() + 'Inventory.csv', 'w') as file:
+                sorted_items = sorted(items.values(),key=lambda v: v.item_id) #sorts values based on item id
+                for i in sorted_items:
+                    if i.item_type == current_type: #prints values line by line
+                        file.write(f'{i.item_id},{i.manufacturer_name},{i.item_price},{i.get_service_date()},{i.damage}\n')
+
+    def pastServiceInventoryReport(self):
+        with open('PartServiceDateInventory.csv', 'w') as file: #opens PartServiceDateInventory.csv file in write mode
+            sorted_items = sorted(items.values(),
+                                  key=lambda v: v.service_date)  # puts values in order based on service date
+            for i in sorted_items:
+                if i.service_date < datetime.now().date(): # if function to check if its was serverced before today
+                    file.write(
+                        f'{i.item_id},{i.manufacturer_name},{i.item_type},{i.item_price},{i.get_service_date()},{i.damage}\n')
+
+    def damageInventoryReport(self):
+        with open('DamagedInventory.csv', 'w') as file:
+            sorted_items = sorted(items.values(), key=lambda v: v.item_price, reverse=True)
+            for i in sorted_items:
+                if i.damage == 'damaged': # if function checks if item had been damedged if so it adds it to file
+                    file.write(f'{i.item_id},{i.manufacturer_name},{i.item_type},{i.item_price},{i.get_service_date()}\n')
+
+    def query (self,querystr):
+        words = querystr.split() # splits up the individual words of the input
+        itemtype = None
+        itemmanu = None
+        itemtypecounter = 0
+        itemmanucounter = 0
+        for word in words: # loops through the words provided to find manufacturer and item type
+            if word in self.types:
+                itemtypecounter += 1
+                itemtype = word
+            elif word in self.manufacturers:
+                itemmanucounter += 1
+                itemmanu = word
+        items = None
+        if itemmanu != None: # stops code from throwing an error if no input was found
+            itemtypes = self.searchengine[itemmanu]
+            if itemtypes != None:
+                items = self.searchengine[itemmanu][itemtype]
+
+        if itemmanucounter == 1 and itemtypecounter == 1 and items != None: # this if statment makes use no two item types are inputed
+            mostexp = most_expensive(items) # findes the most expensive time
+            print('Your item is:', mostexp)
+
+            # Closest priced from random manufacture or across all?
+            # for manu in self.searchengine:
+            #     if manu != itemmanu:
+            #         print(manu,itemmanu)
+            #         if itemtype in self.searchengine[manu]:
+            #             items = self.searchengine[manu][itemtype]
+            #             closestpriceitem = closest_price(items,mostexp.item_price)
+            #             print('You may, also, consider:', closestpriceitem)
+            #             break
+            closestpriceitem = closest_price2(self.searchengine,mostexp.item_price,itemmanu,itemtype)
+            print('You may, also, consider:', closestpriceitem)
+        else:
+            print('No such item in inventory')
+
+
+
+def closest_price(items,price): # this section of code finds the smalled absoulute difference between the avalibale inputs
+    min_index = 0
+    min_diff = sys.maxsize
+    for index in range(len(items)):
+        item = items[index]
+        diff = abs(item.item_price - price)
+        if diff < min_diff:
+            min_index = index
+            min_diff = diff
+    return items[min_index]
+
+def closest_price2(searchengine,price,itemmanu,itemtype): # finds the closest item match in price between all manufactures
+    min_item = None
+    min_diff = sys.maxsize
+    for manu in searchengine:
+        if manu != itemmanu:
+            # print(itemtype,searchengine[manu])
+            if itemtype in searchengine[manu]:
+                items = searchengine[manu][itemtype]
+                closestpriceitem = closest_price(items, price)
+                diff = abs(closestpriceitem.item_price - price)
+                if diff < min_diff:
+                    min_item = closestpriceitem
+                    min_diff = diff
+    return min_item
+
+def most_expensive(items): # if two inputs are provided finds the most expensive one out of them
+    current_max_index = 0
+    for index in range(len(items)):
+        item = items[index]
+        if item.item_price > items[current_max_index].item_price:
+            current_max_index = index
+    return items[current_max_index]
+
+
+
+
+
+if __name__ == '__main__':  # program starts running
+    items = {} # main dictionary
+    with open('ManufacturerList.csv') as file:
+        csvfile = csv.reader(file)
+        for line in csvfile:
+            itemid = line[0]
+            itemmanu = line[1]
+            itemtype = line[2]
+            itemdamage = line[3]
+            item = Item(itemid, itemmanu, itemtype, damage=itemdamage) # pulls out information from file id, manuc, and item type
+            items[itemid] = item
+
+    with open('PriceList.csv') as file:
+        csvfile = csv.reader(file)
+        for line in csvfile:
+            items[line[0]].set_price(line[1])
+
+    with open('ServiceDatesList.csv') as file:
+        csvfile = csv.reader(file)
+        for line in csvfile:
+            items[line[0]].set_servicedate(line[1])
+
+#below these call all the functions in the class
+    inventory = Inventory(items)
+    inventory.fullInventoryReport()
+    inventory.itemInventoryReports()
+    inventory.pastServiceInventoryReport()
+    inventory.damageInventoryReport()
+
+    while True: # loops through the user inputs untill q is given to quit
+        querystr = input('Enter Manufacturer and item type\n')
+        if querystr == 'q':
+            break
+        inventory.query(querystr) # calls the query in inventory
